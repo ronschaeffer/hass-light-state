@@ -24,6 +24,8 @@ For the project, I've used:
 
 and, of course, the original switches and the 433MHz RF transceiver that sends commands to them.
 
+Here's a short video showing the solution in action: https://goo.gl/3iW15H
+
 ### Background
 
 Home Assistant classifies IoT devices according to its state awareness and method https://www.home-assistant.io/blog/2016/02/12/classifying-the-internet-of-things/. 
