@@ -12,7 +12,7 @@ It's been a constant irritation since I started using Domoticz before Home Assis
 
 After mulling over lots of options to add state awareness for the switches and thinking that the hardware was going to be the hard part, it finally dawned on me that this was something I could do with some cheap Sonoffs.
 
-The hard part proved to be the learning curve to get to grips with states, templates, and the REST API in Home Assistant. The solution is working flawlessly so far. Thanks to @thomasloven , @AhmadK, @123 , @petro and @finity for answering my questions here along the way.
+The hard part proved to be the learning curve to get to grips with states, templates, and the REST API in Home Assistant. The solution is working flawlessly so far.
 
 For the project, I've used:
 
@@ -52,13 +52,13 @@ It is possible to do a quick and dirty implementation which simply calls light.t
 
 The hardware set up is simple. I show a Shelly 1 here, but the connections are the same for a Sonoff Basic.
 
-![Installation](/hass-light-state/Installation.png))
+![Installation](https://github.com/ronschaeffer/hass-light-state/blob/master/Installation.png))
 
 In my tests, the Shelly 1s and Sonoffs stayed powered on down to 5% brightness.
 
 When you manually turn off the switch, the Sonoff powers off and disappears from the network, prompting the MQTT broker to send its last will message. That triggers another automation and rest_command pair to set the light status to off.
 
-![Operation](/hass-light-state/Operation.png)
+![Operation](https://github.com/ronschaeffer/hass-light-state/blob/master/Operation.png)
 
 The automations also run when you turn the light on or off through Home Assistant. They're set up to keep the same state attributes, though, so they're invisible to the user.
 
