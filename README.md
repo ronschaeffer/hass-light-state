@@ -17,7 +17,7 @@ The hard part proved to be the learning curve to get to grips with states, templ
 For the project, I've used:
 
 - Home Assistant
-- Sonoff Basics, Sonofff POWs and Shelly 1s - You'll need one of any of them per switch
+- Sonoff Basics, Sonofff POWs and Shelly 1s - You'll need one of any of them per switch. Some smart bulbs also work. See the end of this read me for more details.
 - configuration.yaml edits under homeassistant, light, automation and rest_command. No custom components, Python, automation packages or shell scripts are required.
 - @OttoWinter 's excellent ESPHome  firmware and Hassio add on - Neither are necessary, but they'll make your life easier.
 - MQTT broker
@@ -298,4 +298,105 @@ Tests with LED GU10s look less promising so far. Overall, the voltage range was 
 
 3. See if using ESPHome's new native API is a good alternative to MQTT.
 
-   
+### Update:  Smart bulbs
+
+This method also works with some smart ESP8266 light bulbs such as [Lohas MR16](https://www.amazon.co.uk/gp/product/B07B49MRGH/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1). In that case, you don't need a separate Sonoff/Shelly.
+
+Caveats:
+- You can't adjust the brightness of smart bulbs with the LightwaveRF switches. It's on/off only.
+- I've tried a few other ESP8266 bulbs and socket adapters such as [Lohas bulb](https://www.amazon.co.uk/gp/product/B07LBPSR83/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1), [Teckin bulb](https://www.amazon.co.uk/gp/product/B07KYFGB3M/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1) and [Sonoff bulb socket](https://www.amazon.co.uk/gp/product/B071FQCD6B/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1). As far as I can tell, they can't be made to play well with LightwaveRF switches. All three flickered or occasionally switched on and off.
+
+An example configuration for a Lohas MR16 bulb connected to the LightawaveRF switch named ```light.entry``` follows. Note that if you have more than one bulb associated to a switch, you should only enable MQTT on one of the bulbs.
+
+```
+# Substitutions
+substitutions:
+  devicename: light_entry_bulb_1
+  staticip: 192.168.xxx.xxx
+  mqttclientid: ls_entry
+  birthtopic: light_status/entry/availability
+  lwttopic: light_status/entry/availability
+  lightname: Entry Bulb 1
+
+# Basic config
+esphome:
+  name: $devicename
+  platform: ESP8266
+  esp8266_restore_from_flash: true
+  board: esp01_1m
+  on_boot:
+    then:
+      - light.turn_on:
+          id: light
+          brightness: 100%
+          red: 100%
+          green: 85%
+          blue: 42%
+          white: 75%
+          transition_length: 2s
+
+# Enable WiFi
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pwd
+  manual_ip:
+    static_ip: $staticip
+    gateway: 192.168.86.1
+    subnet: 255.255.255.0
+
+# Enable logging
+logger:
+
+# Enable ESPHome API
+api:
+
+# Enable OTA firmware update
+ota:
+
+# MQTT
+mqtt:
+  broker: !secret mqtt_broker
+  port: !secret mqtt_port
+  client_id: $mqttclientid
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+  discovery: false
+  birth_message:
+    topic: $birthtopic
+    payload: 'online'
+  will_message:
+    topic: $lwttopic
+    payload: 'offline'
+  keepalive: 5s
+
+my9231:
+ data_pin: GPIO13  
+ clock_pin: GPIO15  
+ num_channels: 6
+ num_chips: 2 
+
+output:
+  - platform: my9231
+    id: output_white
+    channel: 0
+  - platform: my9231
+    id: output_blue
+    channel: 1
+  - platform: my9231
+    id: output_red
+    channel: 3
+  - platform: my9231
+    id: output_green
+    channel: 2
+
+light:
+  - platform: rgbw
+    name: $lightname
+    id: light
+    default_transition_length: 0s
+    red: output_red
+    green: output_green
+    blue: output_blue
+    white: output_white
+    ```
+
