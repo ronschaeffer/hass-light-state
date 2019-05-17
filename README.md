@@ -306,7 +306,7 @@ Caveats:
 - You can't adjust the brightness of smart bulbs with the LightwaveRF switches. It's on/off only.
 - I've tried a few other ESP8266 bulbs and socket adapters such as [Lohas bulb](https://www.amazon.co.uk/gp/product/B07LBPSR83/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1), [Teckin bulb](https://www.amazon.co.uk/gp/product/B07KYFGB3M/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1) and [Sonoff bulb socket](https://www.amazon.co.uk/gp/product/B071FQCD6B/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1). As far as I can tell, they can't be made to play well with LightwaveRF switches. All three flickered or occasionally switched on and off.
 
-An example configuration for a Lohas MR16 bulb connected to the LightawaveRF switch named ```light.entry``` follows. Note that if you have more than one bulb associated to a switch, you should only enable MQTT on one of the bulbs.
+An example ESPHome configuration for a Lohas MR16 bulb connected to the LightawaveRF switch named ```light.entry``` follows. Note that if you have more than one bulb associated to a switch, you should only enable MQTT on one of the bulbs.
 
 ```
 # Substitutions
@@ -398,5 +398,6 @@ light:
     green: output_green
     blue: output_blue
     white: output_white
-    ```
+    
+```
 
