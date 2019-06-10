@@ -77,14 +77,24 @@ I use a split configuration. This project required additions to following files:
 ##### configuration.yaml
 
 ```yaml
-# Excerpt from homeassistant
+# Excerpt from homeassistant section - Indented two spaces under homeassistant:
 homeassistant:
   customize_glob: !include customize_glob.yaml
 
-# Excerpt of split configuration
+# Excerpt of split configuration - Not indented
 automation: !include automations.yaml
 light: !include lights.yaml
 rest_command: !include rest_command.yaml
+```
+
+##### secrets.yaml
+
+```yaml
+# Long-lived access token for API access
+# Replace dummy token with your own - Create a LLAT by going to your profile in the HA UI
+# (circle at the top right in the side menu, scroll to the bottom, and then click create a token).
+# Copy the token.
+api-token-with-bearer: 'Bearer xxxxxxxzzzzxxxxxxxcccccccfccccxxxxxzzzzzzzzzcccccccvvcvvcccvvvvvvvccxxxzzzzcccccnnnnnnnnnnnnnnnhgghhhhhhhhhhhhhnnnnnnnnnnnnbbbbvvgvvvvvvvbvcffdxxjnnkkkmhhhvgcffvvvjjjjjnnnnnjjyygttcfffhb'
 ```
 
 ##### automations.yaml
@@ -144,7 +154,9 @@ rest_command: !include rest_command.yaml
 ##### lights.yaml
 
 ```yaml
-# Set up LightwaveRF light switches as lights under the rfxtrx component and name them; Obviously, this would be different if you use a different controller or switches
+# Set up LightwaveRF light switches as lights under the rfxtrx component and name them
+# Obviously, this would be different if you use a different controller or switches.
+# There are just examples. Use your own device IDs and names.
 - platform: rfxtrx
   automatic_add: false
   signal_repetitions: 3
@@ -204,41 +216,74 @@ light_status_update_off:
 
 ### ESPHome device configuration example
 
-Here's an example configuration for a Sonoff Basic. The key here is that your MQTT birth and LWT messages follow a consistent structure that can be processed by a templates in HA. Look in automations.yaml to see how that happens. 
+Here's an example configuration for a Sonoff Basic. The key here is that your MQTT birth and LWT messages follow a consistent structure that can be processed by a templates in HA. Look in automations.yaml to see how that happens.
+
+Put your own values in substituions: below. birthtopic & lwttopic format must match exactly to work with the automations in in this repo. Simply replace "study" int this example with the name of your own LightwaveRF switch as you defined it in lights.yaml. Replace any spaces in the name with an underscore. For example, if your light name is Study, use study. If your light name is Living Room, using living_room.
 
 ```yaml
+# Substitutions
+substitutions:
+  devicename: light_status_study #Can be any name you choose
+  staticip: xxx.xxx.xxx.xxx #IP address of your Sonoff or Shelly
+  wifigateway: xxx.xxx.xxx.xxx #IP address of your gateway
+  subnet: 255.255.255.0 #Subnet of your gateway; Probably 255.255.255.0
+  mqttclientid: ls_study #Can be any id you choose, but must be unique
+  birthtopic: light_status/study/availability #Replace "study" with the name of your LightwaveRF swtich in lights.yaml
+  lwttopic: light_status/study/availability #Replace "study" with the name of your LightwaveRF swtich in lights.yaml
+
 # Basic config
 esphome:
-  name: light_status_study
+  name: $devicename
   platform: ESP8266
   board: esp01_1m
+  on_boot:
+    - light.turn_on: led
 
 # Enable WiFi
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_pwd
+  manual_ip:
+    static_ip: $staticip
+    gateway: $wifigateway
+    subnet: $subnet
 
-# Enable ESPHome native API; Optional; Home Assistant doesn't actually have to be aware of the Sonoff itself; HA just needs to receive MQTT messages from it
+# Enable logging
+logger:
+
+# Enable ESPHome API
 api:
 
 # Enable OTA firmware update
 ota:
 
-# Enable MQTT; Choose your topics and payload carefully
+# MQTT
 mqtt:
   broker: !secret mqtt_broker
   port: !secret mqtt_port
-  client_id: ls_study
+  client_id: $mqttclientid
   username: !secret mqtt_username
   password: !secret mqtt_password
   discovery: false
   birth_message:
-    topic: 'light_status/study/availability'
+    topic: $birthtopic
     payload: 'online'
   will_message:
-    topic: 'light_status/study/availability'
+    topic: $lwttopic
     payload: 'offline'
   keepalive: 5s
+  
+output:
+  - platform: esp8266_pwm
+    id:  basic_green_led
+    pin:
+      number: GPIO13
+      inverted: True
+
+light:
+  - platform: monochromatic
+    output: basic_green_led
+    id: led
 ```
 
 ### Software, switches, controllers & components
@@ -247,7 +292,7 @@ I used the following in my testing. I've also include some comments on alternati
 
 ##### Software
 
-- Hassio 0.86, 0.87, 0.88 and 0.89 in a Docker container on Ubuntu Server 18.04
+- Hassio 0.86 - 0.94.1 (as of 10 Jun 19) in a Docker container on Ubuntu Server 18.04
 - (Optional) ESPHome Hassio add-on (see below) https://esphome.io/guides/getting_started_hassio.html
 - Mosquitto MQTT broker running in a separate Docker container. But, the Hassio MQTT add-on or any other broker shoudl also work.
 
