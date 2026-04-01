@@ -15,7 +15,7 @@ It's been a constant irritation since I started using Domoticz before Home Assis
 - Options for my no-neutral-at-the-switch UK lighting system are extremely limited, and most of the few options don't support dimming.
 - LightwaveRF Gen 1 switches still look great.
 
-After mulling over lots of options to add state awareness for the switches, it finally dawned on me that this was something I could do with some cheap Sonoffs.
+After mulling over lots of options to add state awareness for the switches, it finally dawned on me that this was something I could do with some cheap ESP devices.
 
 Here's a short video showing the solution in action: https://goo.gl/3iW15H
 
@@ -34,7 +34,7 @@ Devices like LightwaveRF Gen 1 light switches are in the Assumed State category.
 
 This project effectively moves LightwaveRF Gen 1 and similar switches from Assumed State to Local Push, with a few caveats:
 
-- HA isn't getting state updates directly from the switches. It gets them from a secondary device — a Sonoff Basic or similar — that mirrors the mains power state of the lighting circuit.
+- HA isn't getting state updates directly from the switches. It gets them from a secondary device that mirrors the mains power state of the lighting circuit.
 - There is a lag of some seconds at power-on (device boot time + WiFi connect + MQTT birth message) and at power-off (MQTT broker keepalive timeout before LWT is delivered).
 - Manually-set brightness level is not known.
 
@@ -42,17 +42,17 @@ This project effectively moves LightwaveRF Gen 1 and similar switches from Assum
 
 ## How it works
 
-The key enabler is a **Sonoff Basic** (or similar ESP8266/ESP32 device running ESPHome) wired into the lighting ring **after** the LightwaveRF switch, so that it only receives mains power when the switch is on.
+The key enabler is any **mains-powered ESP8266 or ESP32 device running ESPHome** — a Sonoff Basic, Shelly 1, or similar — wired into the lighting ring **after** the LightwaveRF switch, so that it only receives mains power when the switch is on.
 
 **Power on → light on:**
-When the LightwaveRF switch is turned on (manually or via HA), mains power reaches the Sonoff. It boots, connects to WiFi, connects to the MQTT broker, and sends its **birth message** (`online`) to its configured topic (`light_status/<n>/availability`). A HA automation receives this and sets the corresponding light entity state to `on`.
+When the LightwaveRF switch is turned on (manually or via HA), mains power reaches the ESP device. It boots, connects to WiFi, connects to the MQTT broker, and sends its **birth message** (`online`) to its configured topic (`light_status/<n>/availability`). A HA automation receives this and sets the corresponding light entity state to `on`.
 
 **Power off → light off:**
-When the switch is turned off, mains power is cut. The Sonoff drops off the network. The MQTT broker detects the lost connection (within the keepalive window, set to 5s) and delivers the pre-registered **Last Will and Testament (LWT)** message (`offline`) to the same topic. The HA automation receives this and sets the light entity state to `off`.
+When the switch is turned off, mains power is cut. The ESP device drops off the network. The MQTT broker detects the lost connection (within the keepalive window, set to 5s) and delivers the pre-registered **Last Will and Testament (LWT)** message (`offline`) to the same topic. The HA automation receives this and sets the light entity state to `off`.
 
 Both birth and LWT messages are **retained** by the broker, so HA will receive the correct state on restart without waiting for the next state change.
 
-The Sonoff's own status LED is turned on at boot (`on_boot: light.turn_on`) purely as a visual indicator that the device has power — it has no effect on the room lighting.
+The device's own status LED is turned on at boot (`on_boot: light.turn_on`) purely as a visual indicator that it has power — it has no effect on the room lighting.
 
 ![Installation](https://github.com/ronschaeffer/hass-light-state/blob/master/Installation.png)
 
@@ -66,19 +66,19 @@ Do not electrocute yourself or burn your house down. Be sensible.
 
 ---
 
-## Current method (ESPHome + python_script)
-
-This is the current recommended approach. It replaces the original REST command method (documented below for continuity) with a simpler, more robust solution using [pmazz/ps_hassio_entities](https://github.com/pmazz/ps_hassio_entities) — a Python script that sets entity state directly via `hass.states.set()`, with no long-lived access token or local API calls required.
+## Method (ESPHome + python_script)
 
 ### Dependencies
 
-- **ESPHome** — for firmware on the Sonoff/ESP devices
+- **ESPHome** — for firmware on the ESP devices
 - **MQTT broker** — e.g. Mosquitto or EMQX
 - **[pmazz/ps_hassio_entities](https://github.com/pmazz/ps_hassio_entities)** — install via HACS or copy `hass_entities.py` to your `/config/python_scripts/` directory. Enable `python_script:` in `configuration.yaml` if not already present.
 
 ### ESPHome device configuration
 
-One ESPHome device per LightwaveRF switch. The `endpoint` substitution must exactly match the `<n>` segment of the corresponding HA light entity ID (e.g. `endpoint: kitchen_main` → `light.kitchen_main`).
+One ESPHome device per LightwaveRF switch. Any mains-powered ESP8266 or ESP32 board running ESPHome will work — Sonoff Basic, Shelly 1, or any equivalent device. The `endpoint` substitution must exactly match the `<n>` segment of the corresponding HA light entity ID (e.g. `endpoint: kitchen_main` → `light.kitchen_main`).
+
+The example below is based on a Sonoff Basic (ESP8266, `esp01_1m` board, GPIO13 LED). Adjust `esp8266`/`esp32`, `board`, `led_pin`, and `output` platform to match your hardware.
 
 ```yaml
 substitutions:
@@ -100,7 +100,7 @@ substitutions:
   birthtopic: ${domain}/${endpoint}/availability
   lwttopic: ${domain}/${endpoint}/availability
 
-  # Pins
+  # Pins — adjust for your hardware
   led_pin: GPIO13
 
   # IDs
@@ -111,7 +111,7 @@ esphome:
   friendly_name: $friendly_name
   area: $area
   on_boot:
-    - light.turn_on: $led_id   # Turns on the Sonoff's own status LED — not the room light
+    - light.turn_on: $led_id   # Turns on the device's own status LED — not the room light
 
 esp8266:
   board: esp01_1m
@@ -234,7 +234,7 @@ action:
 - `mode: parallel` with `max: 10` allows multiple devices to be processed simultaneously — important on HA startup when retained messages replay for all devices at once.
 - The state template uses a simple inline ternary. Avoid multi-line Jinja2 `if/elif` blocks here as they can introduce whitespace into the state string.
 - MQTT birth/LWT messages are retained by ESPHome by default, so HA receives the correct state on restart via retained message replay.
-- Do **not** rely on the ESPHome native API connection (the `_status_light_led` entities in HA) to determine whether a light is on or off. Those entities show `unavailable` when the Sonoff has no mains power — which is the correct and expected idle state when the switch is off. The authoritative source is always the MQTT retained message on `light_status/<n>/availability`.
+- Do **not** rely on the ESPHome native API connection (the `_status_light_led` entities in HA) to determine whether a light is on or off. Those entities show `unavailable` when the device has no mains power — which is the correct and expected idle state when the switch is off. The authoritative source is always the MQTT retained message on `light_status/<n>/availability`.
 
 ### Verifying state via MQTT
 
@@ -348,38 +348,15 @@ light_status_update_off:
     }
 ```
 
-### Legacy ESPHome config format
-
-Earlier versions of this project used a remote GitHub package to share common config across devices:
-
-```yaml
-substitutions:
-  platform: esp8266
-  board: esp01_1m
-  output_platform: esp8266_pwm
-  powerledgpio: GPIO13
-  endpoint: study_main
-
-packages:
-  light_status_logic:
-    url: https://github.com/ronschaeffer/esphome_packages
-    file: projects/light_status.yaml
-    ref: main
-    username: ronschaeffer
-    password: !secret github_access_token
-```
-
-This approach has been replaced with self-contained per-device YAML files (see current method above) which are easier to manage, version, and debug without depending on an external package repo.
-
 ---
 
 ## Hardware
 
-### WiFi relay devices
+### ESP devices
 
-Any ESP8266/ESP32 device running ESPHome that can be wired into the lighting ring will work. Tested devices:
+Any mains-powered ESP8266 or ESP32 device running ESPHome that can be wired into the lighting ring will work. Tested devices include:
 
-- **Sonoff Basic** — recommended. Inexpensive, reliable with ESPHome. Stays powered down to ~5% brightness on dimmer switches.
+- **Sonoff Basic** — inexpensive, reliable. Stays powered down to ~5% brightness on dimmer switches.
 - **Shelly 1** — smaller form factor, works with stock firmware or ESPHome.
 - **Sonoff POW** — same on/off operation, with the addition of power monitoring which could potentially be used to approximate brightness (see below).
 
@@ -387,7 +364,7 @@ Tasmota was also tested but found to be less stable — devices would drop from 
 
 ### Hardware installation
 
-The Sonoff/Shelly is wired into the lighting ring after the LightwaveRF switch, so it only receives mains power when the switch is on. The connections are the same for Sonoff Basic and Shelly 1.
+The ESP device is wired into the lighting ring after the LightwaveRF switch, so it only receives mains power when the switch is on.
 
 ![Installation](https://github.com/ronschaeffer/hass-light-state/blob/master/Installation.png)
 
@@ -400,10 +377,10 @@ The Sonoff/Shelly is wired into the lighting ring after the LightwaveRF switch, 
 
 ## Notes on the `_status_light_led` entities in HA
 
-When ESPHome devices are discovered by HA via the native API, they appear as entities (e.g. `light.kitchen_main_status_light_led`). These reflect the Sonoff's own LED state and API connection status — **not** the room light state.
+When ESPHome devices are discovered by HA via the native API, they appear as entities (e.g. `light.kitchen_main_status_light_led`). These reflect the device's own LED state and API connection status — **not** the room light state.
 
-- When the switch is **off**, the Sonoff has no mains power → no WiFi → no API connection → entity shows `unavailable`. This is correct and expected.
-- When the switch is **on**, the Sonoff boots and connects → entity shows `on` (the status LED is illuminated).
+- When the switch is **off**, the device has no mains power → no WiFi → no API connection → entity shows `unavailable`. This is correct and expected.
+- When the switch is **on**, the device boots and connects → entity shows `on` (the status LED is illuminated).
 
 **Do not use these entities to infer room light state.** They are diagnostic only. The authoritative source is always the MQTT retained message on `light_status/<n>/availability`.
 
@@ -427,7 +404,7 @@ Tests with LED GU10s were less conclusive — the voltage range was smaller and 
 
 ## Smart bulbs (alternative approach)
 
-This method also works with some smart ESP8266 bulbs (e.g. Lohas MR16) wired behind a LightwaveRF switch. The bulb itself acts as the status device — no separate Sonoff is needed.
+This method also works with some smart ESP8266 bulbs (e.g. Lohas MR16) wired behind a LightwaveRF switch. The bulb itself acts as the status device — no separate ESP device is needed.
 
 Caveats:
 - Brightness cannot be adjusted via the LightwaveRF switch — on/off only.
